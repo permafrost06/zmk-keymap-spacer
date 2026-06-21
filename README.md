@@ -2,13 +2,41 @@
 
 Formats ZMK-style keymaps in-place from Vim or Neovim using `!` bang filters. It can align keymaps to a fixed width, place them into a visual `.layout` mask, and generate border comments that can be safely reformatted again.
 
-## Build
+## Install
+
+Install with Go:
+
+```sh
+go install .
+```
+
+This installs `zmk-keymap-spacer` into your Go binary directory, usually `~/go/bin`.
+
+Make sure that directory is in your `PATH`:
+
+```sh
+export PATH="$HOME/go/bin:$PATH"
+```
+
+You can also use the Makefile:
+
+```sh
+make install
+```
+
+Then call the tool from Vim or Neovim without `./`:
+
+```vim
+:'<,'>!zmk-keymap-spacer -width 13 -layout sofleez.layout -split-middle
+```
+
+## Build Locally
 
 ```sh
 go build -o zmk-keymap-spacer .
 ```
 
-Put the built binary somewhere convenient for your editor, or call it by path from your keymap file.
+If you build locally instead of installing, call it by path from your keymap file, for example `./zmk-keymap-spacer`.
 
 ## Vim/Neovim Usage
 
