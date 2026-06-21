@@ -1,11 +1,49 @@
 # zmk-keymap-spacer
 
-Formats ZMK-style keymaps so every keymap occupies a fixed width. It can also place keymaps into a visual `.layout` mask and generate border comments.
+Formats ZMK-style keymaps in-place from Vim or Neovim using `!` bang filters. It can align keymaps to a fixed width, place them into a visual `.layout` mask, and generate border comments that can be safely reformatted again.
 
 ## Build
 
 ```sh
 go build -o zmk-keymap-spacer .
+```
+
+Put the built binary somewhere convenient for your editor, or call it by path from your keymap file.
+
+## Vim/Neovim Usage
+
+The primary workflow is formatting a selected block inside a ZMK keymap file.
+
+Select the keymap lines in visual mode, then run:
+
+```vim
+:'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout
+```
+
+For a split keyboard layout:
+
+```vim
+:'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout -split-middle
+```
+
+For simple alignment without a layout:
+
+```vim
+:'<,'>!./zmk-keymap-spacer -width 13
+```
+
+Format the current paragraph without a visual selection:
+
+```vim
+vip:!./zmk-keymap-spacer -width 13
+```
+
+Generated border lines start with `//`, and input lines starting with `//` are ignored. That means you can run the same bang command repeatedly over already formatted output.
+
+Example repeated formatting command:
+
+```vim
+:'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout -split-middle
 ```
 
 ## Plain Formatting
@@ -126,37 +164,13 @@ Output:
 
 ## Ignored Lines
 
-Input lines starting with `//` are ignored. This lets you re-run the formatter over already formatted output:
+Input lines starting with `//` are ignored. This lets you re-run the formatter over already formatted output from Vim or Neovim:
 
 ```sh
 :'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout -split-middle
 ```
 
 Indented comment lines are ignored too.
-
-## Vim/Neovim
-
-Use Vim or Neovim's `!` bang filter to format keymap blocks directly inside a keymap file.
-
-Format the visually selected lines:
-
-```vim
-:'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout
-```
-
-Format the visually selected lines for a split keyboard:
-
-```vim
-:'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout -split-middle
-```
-
-Format the current paragraph without a layout:
-
-```vim
-vip:!./zmk-keymap-spacer -width 13
-```
-
-Because generated border lines start with `//`, you can run the same command again on already formatted output.
 
 ## Supported Keymaps
 
