@@ -2,6 +2,9 @@
 
 Formats ZMK-style keymaps in-place from Vim or Neovim using `!` bang filters. It can align keymaps to a fixed width, place them into a visual `.layout` mask, and generate border comments that can be safely reformatted again.
 
+# Demo
+https://github.com/user-attachments/assets/48c3c9ee-d275-4f23-a64a-fe3dcbf2d60b
+
 ## Install
 
 Install with Go:
