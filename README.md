@@ -72,6 +72,12 @@ For simple alignment without a layout:
 :'<,'>!./zmk-keymap-spacer -width 13
 ```
 
+Output keymap lines start with four spaces by default. Override that with `-indent`:
+
+```vim
+:'<,'>!./zmk-keymap-spacer -layout sofleez.layout -indent '  '
+```
+
 Format the current paragraph without a visual selection:
 
 ```vim
@@ -101,7 +107,11 @@ Output:
     &kp A        &kp ENTER
 ```
 
-Each output line starts with four spaces.
+Each keymap output line starts with four spaces by default. Use `-indent` to customize it:
+
+```sh
+printf '&kp TAB &mo FN\n' | ./zmk-keymap-spacer -width 13 -indent '  '
+```
 
 Omit `-width` to use the default `+3`, or pass a different relative width such as `+1` or `+5`:
 

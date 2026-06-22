@@ -6,7 +6,7 @@ func TestFixKeymapSpacing(t *testing.T) {
 	input := "&kp TAB @mo FN\n&kp A &kp ENTER\n___ XXX &studio_unlock &bootloader &sys_reset\n&bt BT_SEL 1 &bt BT_CLR &kp A"
 	want := "    &kp TAB        @mo FN         \n    &kp A          &kp ENTER      \n    ___            XXX            &studio_unlock &bootloader    &sys_reset     \n    &bt BT_SEL 1   &bt BT_CLR     &kp A          "
 
-	got, err := fixKeymapSpacing(input, 15)
+	got, err := fixKeymapSpacing(input, 15, "    ")
 	if err != nil {
 		t.Fatalf("fixKeymapSpacing returned error: %v", err)
 	}
@@ -16,18 +16,29 @@ func TestFixKeymapSpacing(t *testing.T) {
 }
 
 func TestFixKeymapSpacingRejectsTooWideKeymap(t *testing.T) {
-	_, err := fixKeymapSpacing("&kp ENTER", 5)
+	_, err := fixKeymapSpacing("&kp ENTER", 5, "    ")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestFixKeymapSpacingUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
-	got, err := fixKeymapSpacing("&kp A &kp ENTER", 0)
+	got, err := fixKeymapSpacing("&kp A &kp ENTER", 0, "    ")
 	if err != nil {
 		t.Fatalf("fixKeymapSpacing returned error: %v", err)
 	}
 	want := "    &kp A       &kp ENTER   "
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestFixKeymapSpacingUsesCustomIndent(t *testing.T) {
+	got, err := fixKeymapSpacing("&kp A", 10, "\t")
+	if err != nil {
+		t.Fatalf("fixKeymapSpacing returned error: %v", err)
+	}
+	want := "\t&kp A     "
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -67,7 +78,7 @@ func TestFixKeymapLayout(t *testing.T) {
 		"    &kp A     &kp B\n" + middle +
 		"    &kp C     &kp D\n" + bottom
 
-	got, err := fixKeymapLayout(input, layout, 10, false)
+	got, err := fixKeymapLayout(input, layout, 10, false, "    ")
 	if err != nil {
 		t.Fatalf("fixKeymapLayout returned error: %v", err)
 	}
@@ -77,14 +88,14 @@ func TestFixKeymapLayout(t *testing.T) {
 }
 
 func TestFixKeymapLayoutRejectsCountMismatch(t *testing.T) {
-	_, err := fixKeymapLayout("&kp A &kp B", "x", 10, false)
+	_, err := fixKeymapLayout("&kp A &kp B", "x", 10, false, "    ")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestFixKeymapLayoutUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
-	got, err := fixKeymapLayout("&kp A &kp ENTER", "xx", 0, false)
+	got, err := fixKeymapLayout("&kp A &kp ENTER", "xx", 0, false, "    ")
 	if err != nil {
 		t.Fatalf("fixKeymapLayout returned error: %v", err)
 	}

@@ -35,6 +35,7 @@ func resolveWidth(input string, spec string) (int, error) {
 
 func main() {
 	widthSpec := flag.String("width", "+3", "keymap width: exact integer like 13, or relative value like +3")
+	indent := flag.String("indent", "    ", "string written at the start of each keymap output line")
 	input := flag.String("input", "", "multiline keymap string; stdin is used when omitted")
 	layoutPath := flag.String("layout", "", "path to a .layout file; each x is filled with one keymap")
 	splitMiddle := flag.Bool("split-middle", false, "split continuous middle rows into left and right halves")
@@ -56,7 +57,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fixed, err := fixKeymapSpacing(text, width)
+	fixed, err := fixKeymapSpacing(text, width, *indent)
 	if *layoutPath != "" {
 		layout, readErr := os.ReadFile(*layoutPath)
 		if readErr != nil {
@@ -64,7 +65,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		fixed, err = fixKeymapLayout(text, string(layout), width, *splitMiddle)
+		fixed, err = fixKeymapLayout(text, string(layout), width, *splitMiddle, *indent)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -74,7 +75,7 @@ func main() {
 	fmt.Print(fixed)
 }
 
-func fixKeymapSpacing(input string, width int) (string, error) {
+func fixKeymapSpacing(input string, width int, indent string) (string, error) {
 	if width == 0 {
 		var err error
 		width, err = longestKeymapLength(input)
@@ -92,7 +93,7 @@ func fixKeymapSpacing(input string, width int) (string, error) {
 			lineEnd++
 		}
 
-		fixed, err := fixLineSpacing(input[lineStart:lineEnd], width)
+		fixed, err := fixLineSpacing(input[lineStart:lineEnd], width, indent)
 		if err != nil {
 			return "", err
 		}
@@ -112,7 +113,7 @@ func fixKeymapSpacing(input string, width int) (string, error) {
 	return out.String(), nil
 }
 
-func fixKeymapLayout(input string, layout string, width int, splitMiddle bool) (string, error) {
+func fixKeymapLayout(input string, layout string, width int, splitMiddle bool, indent string) (string, error) {
 	if width == 0 {
 		var err error
 		width, err = longestKeymapLength(input)
@@ -139,7 +140,7 @@ func fixKeymapLayout(input string, layout string, width int, splitMiddle bool) (
 		out.WriteString(border)
 		out.WriteByte('\n')
 
-		out.WriteString("    ")
+		out.WriteString(indent)
 		var rowOut strings.Builder
 		splitIndex := splitMiddleIndex(row, splitMiddle)
 		for i, r := range row {
@@ -391,14 +392,14 @@ func longestKeymapLength(input string) (int, error) {
 	return width, nil
 }
 
-func fixLineSpacing(line string, width int) (string, error) {
+func fixLineSpacing(line string, width int, indent string) (string, error) {
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
-		return "    ", nil
+		return indent, nil
 	}
 
 	var out strings.Builder
-	out.WriteString("    ")
+	out.WriteString(indent)
 	for i := 0; i < len(fields); {
 		keymapLen := keymapFieldCount(fields[i:])
 		if keymapLen == 0 {
