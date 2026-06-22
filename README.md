@@ -3,6 +3,7 @@
 Formats ZMK-style keymaps in-place from Vim or Neovim using `!` bang filters. It can align keymaps to a fixed width, place them into a visual `.layout` mask, and generate border comments that can be safely reformatted again.
 
 `-width` accepts either an exact integer, like `13`, or a relative value, like `+3`. If `-width` is omitted, the default is `+3`, which means the longest keymap length plus three spaces.
+
 This is a purely vibe-coded tool. I haven't even read the code but it's probably not dangerous. If this tool comes close but doesn't quite meet your need, I suggest you try using a coding agent to add your desired feature.
 
 # Demo
