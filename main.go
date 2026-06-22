@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var onePartKeymaps = []string{"___", "XXX", "&studio_unlock", "&bootloader", "&sys_reset"}
+var onePartKeymaps = []string{"___", "XXX", "_BT_SEL_KEYS_", "&studio_unlock", "&bootloader", "&sys_reset", "&caps_word"}
 
 func resolveWidth(input string, spec string) (int, error) {
 	if strings.HasPrefix(spec, "+") {
@@ -57,7 +57,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fixed, err := fixKeymapSpacing(text, width, *indent)
+	var fixed string
 	if *layoutPath != "" {
 		layout, readErr := os.ReadFile(*layoutPath)
 		if readErr != nil {
@@ -66,6 +66,8 @@ func main() {
 		}
 
 		fixed, err = fixKeymapLayout(text, string(layout), width, *splitMiddle, *indent)
+	} else {
+		fixed, err = fixKeymapSpacing(text, width, *indent)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -143,7 +145,8 @@ func fixKeymapLayout(input string, layout string, width int, splitMiddle bool, i
 		out.WriteString(indent)
 		var rowOut strings.Builder
 		splitIndex := splitMiddleIndex(row, splitMiddle)
-		for i, r := range row {
+		for i := 0; i < len(row); i++ {
+			r := rune(row[i])
 			if r == ' ' {
 				writeKeyRowGap(&rowOut, row, i, width, splitMiddle)
 				continue
@@ -157,6 +160,18 @@ func fixKeymapLayout(input string, layout string, width int, splitMiddle bool, i
 			}
 
 			keymap := keymaps[keymapIndex]
+			span := keymapSpan(keymap)
+			if span > 1 {
+				if countSlots(row[i:]) < span {
+					return "", fmt.Errorf("keymap %q needs %d layout slots", keymap, span)
+				}
+
+				rowOut.WriteString(center(keymap, width*span))
+				keymapIndex++
+				i += span - 1
+				continue
+			}
+
 			rowOut.WriteString(keymap)
 			rowOut.WriteString(strings.Repeat(" ", width-len(keymap)))
 			keymapIndex++
@@ -297,6 +312,36 @@ func writeKeyRowGap(out *strings.Builder, row string, i int, width int, splitMid
 	}
 }
 
+func keymapSpan(keymap string) int {
+	if keymap == "_BT_SEL_KEYS_" {
+		return 5
+	}
+	return 1
+}
+
+func countSlots(row string) int {
+	count := 0
+	for i := 0; i < len(row); i++ {
+		if row[i] == 'x' {
+			count++
+			continue
+		}
+		if row[i] != '|' {
+			break
+		}
+	}
+	return count
+}
+
+func center(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	left := (width - len(s)) / 2
+	right := width - len(s) - left
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", right)
+}
+
 func borderRune(left bool, right bool, up bool, down bool) string {
 	switch {
 	case left && right && up && down:
@@ -367,7 +412,7 @@ func parseKeymaps(input string, width int) ([]string, error) {
 		}
 
 		keymap := strings.Join(fields[i:i+keymapLen], " ")
-		if width > 0 && len(keymap) > width {
+		if width > 0 && len(keymap) > width*keymapSpan(keymap) {
 			return nil, fmt.Errorf("keymap %q is longer than width %d", keymap, width)
 		}
 		keymaps = append(keymaps, keymap)
@@ -435,6 +480,9 @@ func keymapFieldCount(fields []string) int {
 		return 2
 	}
 	if fields[0] == "&bt" && len(fields) >= 3 && fields[1] == "BT_SEL" {
+		return 3
+	}
+	if (fields[0] == "&hml" || fields[0] == "&hmr") && len(fields) >= 3 {
 		return 3
 	}
 	if (strings.HasPrefix(fields[0], "&") || strings.HasPrefix(fields[0], "@")) && len(fields) >= 2 {

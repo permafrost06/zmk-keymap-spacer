@@ -253,6 +253,8 @@ Three-part keymaps:
 
 ```text
 &bt BT_SEL 1
+&hml LSHFT D
+&hmr RSHFT K
 ```
 
 One-part keymaps:
@@ -263,6 +265,15 @@ XXX
 &studio_unlock
 &bootloader
 &sys_reset
+&caps_word
 ```
+
+Five-slot labels:
+
+```text
+_BT_SEL_KEYS_
+```
+
+In layout mode, `_BT_SEL_KEYS_` consumes five adjacent `x` slots and is centered across them.
 
 If a keymap is longer than `-width`, the program exits with an error.
