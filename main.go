@@ -6,22 +6,39 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 var onePartKeymaps = []string{"___", "XXX", "&studio_unlock", "&bootloader", "&sys_reset"}
 
+func resolveWidth(input string, spec string) (int, error) {
+	if strings.HasPrefix(spec, "+") {
+		extra, err := strconv.Atoi(strings.TrimPrefix(spec, "+"))
+		if err != nil || extra < 0 {
+			return 0, fmt.Errorf("-width relative value must look like +3")
+		}
+
+		width, err := longestKeymapLength(input)
+		if err != nil {
+			return 0, err
+		}
+		return width + extra, nil
+	}
+
+	width, err := strconv.Atoi(spec)
+	if err != nil || width <= 0 {
+		return 0, fmt.Errorf("-width must be an integer greater than 0 or a relative value like +3")
+	}
+	return width, nil
+}
+
 func main() {
-	width := flag.Int("width", 0, "number of characters each keymap should occupy")
+	widthSpec := flag.String("width", "+3", "keymap width: exact integer like 13, or relative value like +3")
 	input := flag.String("input", "", "multiline keymap string; stdin is used when omitted")
 	layoutPath := flag.String("layout", "", "path to a .layout file; each x is filled with one keymap")
 	splitMiddle := flag.Bool("split-middle", false, "split continuous middle rows into left and right halves")
 	flag.Parse()
-
-	if *width <= 0 {
-		fmt.Fprintln(os.Stderr, "-width must be greater than 0")
-		os.Exit(1)
-	}
 
 	text := *input
 	if text == "" {
@@ -33,7 +50,13 @@ func main() {
 		text = string(data)
 	}
 
-	fixed, err := fixKeymapSpacing(text, *width)
+	width, err := resolveWidth(text, *widthSpec)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fixed, err := fixKeymapSpacing(text, width)
 	if *layoutPath != "" {
 		layout, readErr := os.ReadFile(*layoutPath)
 		if readErr != nil {
@@ -41,7 +64,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		fixed, err = fixKeymapLayout(text, string(layout), *width, *splitMiddle)
+		fixed, err = fixKeymapLayout(text, string(layout), width, *splitMiddle)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -52,6 +75,15 @@ func main() {
 }
 
 func fixKeymapSpacing(input string, width int) (string, error) {
+	if width == 0 {
+		var err error
+		width, err = longestKeymapLength(input)
+		if err != nil {
+			return "", err
+		}
+		width += 3
+	}
+
 	var out strings.Builder
 
 	for lineStart := 0; lineStart < len(input); {
@@ -81,6 +113,15 @@ func fixKeymapSpacing(input string, width int) (string, error) {
 }
 
 func fixKeymapLayout(input string, layout string, width int, splitMiddle bool) (string, error) {
+	if width == 0 {
+		var err error
+		width, err = longestKeymapLength(input)
+		if err != nil {
+			return "", err
+		}
+		width += 3
+	}
+
 	keymaps, err := parseKeymaps(input, width)
 	if err != nil {
 		return "", err
@@ -325,7 +366,7 @@ func parseKeymaps(input string, width int) ([]string, error) {
 		}
 
 		keymap := strings.Join(fields[i:i+keymapLen], " ")
-		if len(keymap) > width {
+		if width > 0 && len(keymap) > width {
 			return nil, fmt.Errorf("keymap %q is longer than width %d", keymap, width)
 		}
 		keymaps = append(keymaps, keymap)
@@ -333,6 +374,21 @@ func parseKeymaps(input string, width int) ([]string, error) {
 	}
 
 	return keymaps, nil
+}
+
+func longestKeymapLength(input string) (int, error) {
+	keymaps, err := parseKeymaps(input, 0)
+	if err != nil {
+		return 0, err
+	}
+	width := 0
+	for _, keymap := range keymaps {
+		width = max(width, len(keymap))
+	}
+	if width == 0 {
+		return 0, fmt.Errorf("no keymaps found")
+	}
+	return width, nil
 }
 
 func fixLineSpacing(line string, width int) (string, error) {

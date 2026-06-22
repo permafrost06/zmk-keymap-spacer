@@ -22,6 +22,41 @@ func TestFixKeymapSpacingRejectsTooWideKeymap(t *testing.T) {
 	}
 }
 
+func TestFixKeymapSpacingUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
+	got, err := fixKeymapSpacing("&kp A &kp ENTER", 0)
+	if err != nil {
+		t.Fatalf("fixKeymapSpacing returned error: %v", err)
+	}
+	want := "    &kp A       &kp ENTER   "
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestResolveWidth(t *testing.T) {
+	tests := []struct {
+		name  string
+		spec  string
+		input string
+		want  int
+	}{
+		{name: "exact", spec: "13", input: "&kp A", want: 13},
+		{name: "relative", spec: "+2", input: "&kp A &kp ENTER", want: 11},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveWidth(tt.input, tt.spec)
+			if err != nil {
+				t.Fatalf("resolveWidth returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("got %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFixKeymapLayout(t *testing.T) {
 	input := "&kp A &kp B &kp C &kp D"
 	layout := "xx\nxx"
@@ -45,6 +80,17 @@ func TestFixKeymapLayoutRejectsCountMismatch(t *testing.T) {
 	_, err := fixKeymapLayout("&kp A &kp B", "x", 10, false)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestFixKeymapLayoutUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
+	got, err := fixKeymapLayout("&kp A &kp ENTER", "xx", 0, false)
+	if err != nil {
+		t.Fatalf("fixKeymapLayout returned error: %v", err)
+	}
+	want := "//╭───────────┬───────────╮\n    &kp A       &kp ENTER\n//╰───────────┴───────────╯"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 

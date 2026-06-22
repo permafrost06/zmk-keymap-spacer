@@ -1,6 +1,8 @@
 # zmk-keymap-spacer
 
 Formats ZMK-style keymaps in-place from Vim or Neovim using `!` bang filters. It can align keymaps to a fixed width, place them into a visual `.layout` mask, and generate border comments that can be safely reformatted again.
+
+`-width` accepts either an exact integer, like `13`, or a relative value, like `+3`. If `-width` is omitted, the default is `+3`, which means the longest keymap length plus three spaces.
 This is a purely vibe-coded tool. I haven't even read the code but it's probably not dangerous. If this tool comes close but doesn't quite meet your need, I suggest you try using a coding agent to add your desired feature.
 
 # Demo
@@ -52,6 +54,12 @@ Select the keymap lines in visual mode, then run:
 :'<,'>!./zmk-keymap-spacer -width 13 -layout sofleez.layout
 ```
 
+Or let the tool use the default width, `+3`:
+
+```vim
+:'<,'>!./zmk-keymap-spacer -layout sofleez.layout
+```
+
 For a split keyboard layout:
 
 ```vim
@@ -94,6 +102,22 @@ Output:
 ```
 
 Each output line starts with four spaces.
+
+Omit `-width` to use the default `+3`, or pass a different relative width such as `+1` or `+5`:
+
+```sh
+printf '&kp A &kp ENTER\n' | ./zmk-keymap-spacer
+```
+
+```sh
+printf '&kp A &kp ENTER\n' | ./zmk-keymap-spacer -width +5
+```
+
+Output:
+
+```text
+    &kp A       &kp ENTER
+```
 
 ## Layout Formatting
 
