@@ -1,25 +1,101 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 )
 
-var onePartKeymaps = []string{"___", "XXX", "_BT_SEL_KEYS_", "&studio_unlock", "&bootloader", "&sys_reset", "&caps_word"}
+type symbolRule struct {
+	pattern []string
+	fields  int
+	slots   int
+}
 
-func resolveWidth(input string, spec string) (int, error) {
+//go:embed zmk.symbols
+var defaultSymbolRules string
+
+func parseSymbolRules(input string) ([]symbolRule, error) {
+	var rules []symbolRule
+	for lineNumber, line := range strings.Split(input, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			return nil, fmt.Errorf("line %d: expected PATTERN FIELDS SLOTS", lineNumber+1)
+		}
+		fields, fieldsErr := strconv.Atoi(parts[len(parts)-2])
+		slots, slotsErr := strconv.Atoi(parts[len(parts)-1])
+		pattern := parts[:len(parts)-2]
+		if fieldsErr != nil || fields < len(pattern) {
+			return nil, fmt.Errorf("line %d: fields must be an integer at least as large as the pattern", lineNumber+1)
+		}
+		if slotsErr != nil || slots < 1 {
+			return nil, fmt.Errorf("line %d: slots must be an integer greater than 0", lineNumber+1)
+		}
+		rules = append(rules, symbolRule{pattern: pattern, fields: fields, slots: slots})
+	}
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("no symbol rules found")
+	}
+	return rules, nil
+}
+
+func matchSymbolRule(fields []string, symbols []symbolRule) (symbolRule, bool) {
+	var best symbolRule
+	bestScore := -1
+	for _, rule := range symbols {
+		if len(fields) < len(rule.pattern) {
+			continue
+		}
+
+		wildcard := false
+		matches := true
+		for i, part := range rule.pattern {
+			if strings.HasSuffix(part, "*") {
+				wildcard = true
+				if !strings.HasPrefix(fields[i], strings.TrimSuffix(part, "*")) {
+					matches = false
+					break
+				}
+				continue
+			}
+			if fields[i] != part {
+				matches = false
+				break
+			}
+		}
+		if !matches {
+			continue
+		}
+
+		score := len(rule.pattern) * 2
+		if !wildcard {
+			score++
+		}
+		if score > bestScore {
+			best = rule
+			bestScore = score
+		}
+	}
+	return best, bestScore >= 0
+}
+
+func resolveWidth(input string, spec string, symbols []symbolRule) (int, error) {
 	if strings.HasPrefix(spec, "+") {
 		extra, err := strconv.Atoi(strings.TrimPrefix(spec, "+"))
 		if err != nil || extra < 0 {
 			return 0, fmt.Errorf("-width relative value must look like +3")
 		}
 
-		width, err := longestKeymapLength(input)
+		width, err := longestKeymapLength(input, symbols)
 		if err != nil {
 			return 0, err
 		}
@@ -38,8 +114,24 @@ func main() {
 	indent := flag.String("indent", "    ", "string written at the start of each keymap output line")
 	input := flag.String("input", "", "multiline keymap string; stdin is used when omitted")
 	layoutPath := flag.String("layout", "", "path to a .layout file; each x is filled with one keymap")
+	symbolsPath := flag.String("symbols", "", "path to a symbol rules file; built-in ZMK rules are used when omitted")
 	splitMiddle := flag.Bool("split-middle", false, "split continuous middle rows into left and right halves")
 	flag.Parse()
+
+	symbolData := defaultSymbolRules
+	if *symbolsPath != "" {
+		data, err := os.ReadFile(*symbolsPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read symbols: %v\n", err)
+			os.Exit(1)
+		}
+		symbolData = string(data)
+	}
+	symbols, err := parseSymbolRules(symbolData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read symbols: %v\n", err)
+		os.Exit(1)
+	}
 
 	text := *input
 	if text == "" {
@@ -51,7 +143,7 @@ func main() {
 		text = string(data)
 	}
 
-	width, err := resolveWidth(text, *widthSpec)
+	width, err := resolveWidth(text, *widthSpec, symbols)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -65,9 +157,9 @@ func main() {
 			os.Exit(1)
 		}
 
-		fixed, err = fixKeymapLayout(text, string(layout), width, *splitMiddle, *indent)
+		fixed, err = fixKeymapLayout(text, string(layout), width, *splitMiddle, *indent, symbols)
 	} else {
-		fixed, err = fixKeymapSpacing(text, width, *indent)
+		fixed, err = fixKeymapSpacing(text, width, *indent, symbols)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -77,10 +169,10 @@ func main() {
 	fmt.Print(fixed)
 }
 
-func fixKeymapSpacing(input string, width int, indent string) (string, error) {
+func fixKeymapSpacing(input string, width int, indent string, symbols []symbolRule) (string, error) {
 	if width == 0 {
 		var err error
-		width, err = longestKeymapLength(input)
+		width, err = longestKeymapLength(input, symbols)
 		if err != nil {
 			return "", err
 		}
@@ -95,7 +187,7 @@ func fixKeymapSpacing(input string, width int, indent string) (string, error) {
 			lineEnd++
 		}
 
-		fixed, err := fixLineSpacing(input[lineStart:lineEnd], width, indent)
+		fixed, err := fixLineSpacing(input[lineStart:lineEnd], width, indent, symbols)
 		if err != nil {
 			return "", err
 		}
@@ -115,17 +207,17 @@ func fixKeymapSpacing(input string, width int, indent string) (string, error) {
 	return out.String(), nil
 }
 
-func fixKeymapLayout(input string, layout string, width int, splitMiddle bool, indent string) (string, error) {
+func fixKeymapLayout(input string, layout string, width int, splitMiddle bool, indent string, symbols []symbolRule) (string, error) {
 	if width == 0 {
 		var err error
-		width, err = longestKeymapLength(input)
+		width, err = longestKeymapLength(input, symbols)
 		if err != nil {
 			return "", err
 		}
 		width += 3
 	}
 
-	keymaps, err := parseKeymaps(input, width)
+	keymaps, err := parseKeymaps(input, width, symbols)
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +252,7 @@ func fixKeymapLayout(input string, layout string, width int, splitMiddle bool, i
 			}
 
 			keymap := keymaps[keymapIndex]
-			span := keymapSpan(keymap)
+			span := keymapSpan(keymap, symbols)
 			if span > 1 {
 				if countSlots(row[i:]) < span {
 					return "", fmt.Errorf("keymap %q needs %d layout slots", keymap, span)
@@ -312,11 +404,12 @@ func writeKeyRowGap(out *strings.Builder, row string, i int, width int, splitMid
 	}
 }
 
-func keymapSpan(keymap string) int {
-	if keymap == "_BT_SEL_KEYS_" {
-		return 5
+func keymapSpan(keymap string, symbols []symbolRule) int {
+	rule, ok := matchSymbolRule(strings.Fields(keymap), symbols)
+	if !ok {
+		return 1
 	}
-	return 1
+	return rule.slots
 }
 
 func countSlots(row string) int {
@@ -393,7 +486,7 @@ func splitMiddleIndex(row string, splitMiddle bool) int {
 	return len(row) / 2
 }
 
-func parseKeymaps(input string, width int) ([]string, error) {
+func parseKeymaps(input string, width int, symbols []symbolRule) ([]string, error) {
 	var cleaned strings.Builder
 	for _, line := range strings.Split(input, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "//") {
@@ -406,13 +499,13 @@ func parseKeymaps(input string, width int) ([]string, error) {
 	fields := strings.Fields(cleaned.String())
 	keymaps := make([]string, 0, len(fields))
 	for i := 0; i < len(fields); {
-		keymapLen := keymapFieldCount(fields[i:])
+		keymapLen := keymapFieldCount(fields[i:], symbols)
 		if keymapLen == 0 {
 			return nil, fmt.Errorf("unexpected token %q", fields[i])
 		}
 
 		keymap := strings.Join(fields[i:i+keymapLen], " ")
-		if width > 0 && len(keymap) > width*keymapSpan(keymap) {
+		if width > 0 && len(keymap) > width*keymapSpan(keymap, symbols) {
 			return nil, fmt.Errorf("keymap %q is longer than width %d", keymap, width)
 		}
 		keymaps = append(keymaps, keymap)
@@ -422,8 +515,8 @@ func parseKeymaps(input string, width int) ([]string, error) {
 	return keymaps, nil
 }
 
-func longestKeymapLength(input string) (int, error) {
-	keymaps, err := parseKeymaps(input, 0)
+func longestKeymapLength(input string, symbols []symbolRule) (int, error) {
+	keymaps, err := parseKeymaps(input, 0, symbols)
 	if err != nil {
 		return 0, err
 	}
@@ -437,7 +530,7 @@ func longestKeymapLength(input string) (int, error) {
 	return width, nil
 }
 
-func fixLineSpacing(line string, width int, indent string) (string, error) {
+func fixLineSpacing(line string, width int, indent string, symbols []symbolRule) (string, error) {
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
 		return indent, nil
@@ -446,7 +539,7 @@ func fixLineSpacing(line string, width int, indent string) (string, error) {
 	var out strings.Builder
 	out.WriteString(indent)
 	for i := 0; i < len(fields); {
-		keymapLen := keymapFieldCount(fields[i:])
+		keymapLen := keymapFieldCount(fields[i:], symbols)
 		if keymapLen == 0 {
 			if out.Len() > 0 {
 				out.WriteByte(' ')
@@ -469,24 +562,10 @@ func fixLineSpacing(line string, width int, indent string) (string, error) {
 	return out.String(), nil
 }
 
-func keymapFieldCount(fields []string) int {
-	if len(fields) == 0 {
+func keymapFieldCount(fields []string, symbols []symbolRule) int {
+	rule, ok := matchSymbolRule(fields, symbols)
+	if !ok || len(fields) < rule.fields {
 		return 0
 	}
-	if slices.Contains(onePartKeymaps, fields[0]) {
-		return 1
-	}
-	if fields[0] == "&bt" && len(fields) >= 2 && fields[1] == "BT_CLR" {
-		return 2
-	}
-	if fields[0] == "&bt" && len(fields) >= 3 && fields[1] == "BT_SEL" {
-		return 3
-	}
-	if (fields[0] == "&hml" || fields[0] == "&hmr") && len(fields) >= 3 {
-		return 3
-	}
-	if (strings.HasPrefix(fields[0], "&") || strings.HasPrefix(fields[0], "@")) && len(fields) >= 2 {
-		return 2
-	}
-	return 0
+	return rule.fields
 }

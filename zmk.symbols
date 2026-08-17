@@ -1,0 +1,16 @@
+# Pattern followed by the number of fields consumed and layout slots occupied.
+___ 1 1
+XXX 1 1
+_BT_SEL_KEYS_ 1 5
+&studio_unlock 1 1
+&bootloader 1 1
+&sys_reset 1 1
+&caps_word 1 1
+&bt BT_CLR 2 1
+&bt BT_SEL 3 1
+&hml 3 1
+&hmr 3 1
+&lt 3 1
+&* 2 1
+@* 2 1
+

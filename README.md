@@ -45,6 +45,24 @@ go build -o zmk-keymap-spacer .
 
 If you build locally instead of installing, call it by path from your keymap file, for example `./zmk-keymap-spacer`.
 
+## Symbol Rules
+
+The included `zmk.symbols` is embedded in the binary and used by default. Pass `-symbols` to override it with a custom whitespace-delimited rules file.
+
+Each non-comment line contains a match pattern followed by the number of whitespace-separated fields consumed and the number of layout slots occupied:
+
+```text
+# PATTERN       FIELDS SLOTS
+___             1      1
+_BT_SEL_KEYS_   1      5
+&bt BT_SEL      3      1
+&hml            3      1
+&*              2      1
+@*              2      1
+```
+
+Multi-field patterns take precedence over shorter patterns, and exact patterns take precedence over wildcard patterns of the same length. A pattern token ending in `*` matches that token by prefix, so `&*` and `@*` provide generic two-field fallbacks.
+
 ## Vim/Neovim Usage
 
 The primary workflow is formatting a selected block inside a ZMK keymap file.

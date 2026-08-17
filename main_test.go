@@ -5,11 +5,13 @@ import (
 	"testing"
 )
 
+var testSymbols, _ = parseSymbolRules(defaultSymbolRules)
+
 func TestFixKeymapSpacing(t *testing.T) {
 	input := "&kp TAB @mo FN\n&kp A &kp ENTER\n___ XXX &studio_unlock &bootloader &sys_reset\n&bt BT_SEL 1 &bt BT_CLR &kp A"
 	want := "    &kp TAB        @mo FN         \n    &kp A          &kp ENTER      \n    ___            XXX            &studio_unlock &bootloader    &sys_reset     \n    &bt BT_SEL 1   &bt BT_CLR     &kp A          "
 
-	got, err := fixKeymapSpacing(input, 15, "    ")
+	got, err := fixKeymapSpacing(input, 15, "    ", testSymbols)
 	if err != nil {
 		t.Fatalf("fixKeymapSpacing returned error: %v", err)
 	}
@@ -19,14 +21,14 @@ func TestFixKeymapSpacing(t *testing.T) {
 }
 
 func TestFixKeymapSpacingRejectsTooWideKeymap(t *testing.T) {
-	_, err := fixKeymapSpacing("&kp ENTER", 5, "    ")
+	_, err := fixKeymapSpacing("&kp ENTER", 5, "    ", testSymbols)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestFixKeymapSpacingUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
-	got, err := fixKeymapSpacing("&kp A &kp ENTER", 0, "    ")
+	got, err := fixKeymapSpacing("&kp A &kp ENTER", 0, "    ", testSymbols)
 	if err != nil {
 		t.Fatalf("fixKeymapSpacing returned error: %v", err)
 	}
@@ -37,7 +39,7 @@ func TestFixKeymapSpacingUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
 }
 
 func TestFixKeymapSpacingUsesCustomIndent(t *testing.T) {
-	got, err := fixKeymapSpacing("&kp A", 10, "\t")
+	got, err := fixKeymapSpacing("&kp A", 10, "\t", testSymbols)
 	if err != nil {
 		t.Fatalf("fixKeymapSpacing returned error: %v", err)
 	}
@@ -60,7 +62,7 @@ func TestResolveWidth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveWidth(tt.input, tt.spec)
+			got, err := resolveWidth(tt.input, tt.spec, testSymbols)
 			if err != nil {
 				t.Fatalf("resolveWidth returned error: %v", err)
 			}
@@ -81,7 +83,7 @@ func TestFixKeymapLayout(t *testing.T) {
 		"    &kp A     &kp B\n" + middle +
 		"    &kp C     &kp D\n" + bottom
 
-	got, err := fixKeymapLayout(input, layout, 10, false, "    ")
+	got, err := fixKeymapLayout(input, layout, 10, false, "    ", testSymbols)
 	if err != nil {
 		t.Fatalf("fixKeymapLayout returned error: %v", err)
 	}
@@ -91,14 +93,14 @@ func TestFixKeymapLayout(t *testing.T) {
 }
 
 func TestFixKeymapLayoutRejectsCountMismatch(t *testing.T) {
-	_, err := fixKeymapLayout("&kp A &kp B", "x", 10, false, "    ")
+	_, err := fixKeymapLayout("&kp A &kp B", "x", 10, false, "    ", testSymbols)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestFixKeymapLayoutUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
-	got, err := fixKeymapLayout("&kp A &kp ENTER", "xx", 0, false, "    ")
+	got, err := fixKeymapLayout("&kp A &kp ENTER", "xx", 0, false, "    ", testSymbols)
 	if err != nil {
 		t.Fatalf("fixKeymapLayout returned error: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestFixKeymapLayoutUsesLongestKeymapWhenWidthOmitted(t *testing.T) {
 }
 
 func TestFixKeymapLayoutCentersFiveSlotLabel(t *testing.T) {
-	got, err := fixKeymapLayout("_BT_SEL_KEYS_ &kp A", "xxxxxx", 10, false, "    ")
+	got, err := fixKeymapLayout("_BT_SEL_KEYS_ &kp A", "xxxxxx", 10, false, "    ", testSymbols)
 	if err != nil {
 		t.Fatalf("fixKeymapLayout returned error: %v", err)
 	}
@@ -122,7 +124,7 @@ func TestFixKeymapLayoutCentersFiveSlotLabel(t *testing.T) {
 }
 
 func TestParseKeymapsIgnoresCommentLines(t *testing.T) {
-	got, err := parseKeymaps("// border\n&kp A\n    // another border\n&kp B", 10)
+	got, err := parseKeymaps("// border\n&kp A\n    // another border\n&kp B", 10, testSymbols)
 	if err != nil {
 		t.Fatalf("parseKeymaps returned error: %v", err)
 	}
@@ -138,7 +140,7 @@ func TestParseKeymapsIgnoresCommentLines(t *testing.T) {
 }
 
 func TestParseKeymapsSupportsAdditionalForms(t *testing.T) {
-	got, err := parseKeymaps("&hml LSHFT D &hmr RSHFT K &caps_word _BT_SEL_KEYS_", 0)
+	got, err := parseKeymaps("&hml LSHFT D &hmr RSHFT K &caps_word _BT_SEL_KEYS_", 0, testSymbols)
 	if err != nil {
 		t.Fatalf("parseKeymaps returned error: %v", err)
 	}
@@ -150,5 +152,31 @@ func TestParseKeymapsSupportsAdditionalForms(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("got %v, want %v", got, want)
 		}
+	}
+}
+
+func TestParseSymbolRulesControlsFieldsAndSlots(t *testing.T) {
+	symbols, err := parseSymbolRules("# custom behavior\n&custom 3 2\n&* 2 1\n")
+	if err != nil {
+		t.Fatalf("parseSymbolRules returned error: %v", err)
+	}
+
+	got, err := parseKeymaps("&custom LEFT A &kp B", 10, symbols)
+	if err != nil {
+		t.Fatalf("parseKeymaps returned error: %v", err)
+	}
+	want := []string{"&custom LEFT A", "&kp B"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if span := keymapSpan(got[0], symbols); span != 2 {
+		t.Fatalf("got span %d, want 2", span)
+	}
+}
+
+func TestParseSymbolRulesRejectsInvalidLines(t *testing.T) {
+	_, err := parseSymbolRules("&hml two 1")
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
